@@ -2,13 +2,17 @@
 
 import base64
 
+# Cryptography Library
+from cryptography.fernet import Fernet
+
+# ECIES Library
+import coincurve
+from ecies import encrypt, decrypt
+
 # Flask-RESTful Library
 from flask import Flask
 from flask_restful import Api, Resource, reqparse
 import werkzeug
-
-# Cryptography Library
-from cryptography.fernet import Fernet
 
 # BEOWULF Library
 from beowulf.beowulfd import Beowulfd
@@ -28,6 +32,19 @@ class Ping(Resource):
     return {'return_code': 0, 'message': 'OK'}
 
 class UploadFile(Resource):
+  def encrypt_key(self, pub_key, key_str):
+    try:
+      pub_point = pub_key.point()
+      pub = coincurve.PublicKey.from_point(x=pub_point.x(), y=pub_point.y())
+      return base64.urlsafe_b64encode(encrypt(pub.format(), key_str))
+    except:
+      return ''
+  def decrypt_key(self, pri_key, key_enc_str):
+    try:
+      pri = coincurve.PrivateKey.from_hex(repr(pri_key))
+      return decrypt(pri.to_hex(), base64.urlsafe_b64decode(key_enc_str))
+    except:
+      return ''
   def post(self):
     # Parse arguments
     parser = reqparse.RequestParser()
@@ -45,13 +62,15 @@ class UploadFile(Resource):
       pub_key = pri_key.pubkey
     except:
       return {'return_code': 1, 'message': 'ERROR - Invalid private key format'}
+    # Get info of file
+    file_name = args['file_data'].filename
+    file_data = args['file_data'].read()
     # Encrypt file
-    key_b64 = Fernet.generate_key()
-    key = base64.urlsafe_b64decode(key_b64)
-    f = Fernet(key_b64)
-    file_enc_b64 = f.encrypt(args['file_data'].read())
-    file_enc = base64.urlsafe_b64decode(file_enc_b64)
+    key = Fernet.generate_key()
+    f = Fernet(key)
+    file_enc = base64.urlsafe_b64decode(f.encrypt(file_data))
     # Encrypt key
+    key_enc = self.encrypt_key(pub_key, key)
     # Upload file
     # Broadcast TX
     # Return TXID
