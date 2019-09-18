@@ -1,8 +1,11 @@
+#!/usr/bin/python3
 import logging
 import time
 from enum import Enum
 
 import ipfshttpclient
+
+from helpers.config_helper import config_helper
 
 log = logging.getLogger('ipfs_connector.ipfs_connector')
 log.setLevel(logging.DEBUG)
@@ -14,15 +17,16 @@ class State(Enum):
     CONNETED = 1
     DISCONNECTED = 0
 
-connected_clients = []
+
+configuration = config_helper("")
 
 
 class ipfs_connector(object):
     """
-    Listen and connect to IPFS hosts
+    Connector for listening and connecting to IPFS hosts
     """
 
-    def __init__(self, ipfs_server, ipfs_port):
+    def __init__(self, ipfs_server=None, ipfs_port=None):
         self.ipfs = None
         self.ipfs_server = ipfs_server
         self.ipfs_port = ipfs_port
@@ -35,11 +39,13 @@ class ipfs_connector(object):
         ipfs_retry_count = 0
         while self.ipfs is None:
             try:
+                host = self._random_select()
+                self.ipfs_server = host.hostname
+                self.ipfs_port = host.port
                 self.ipfs = ipfshttpclient.connect(
                     ADDRESS_BASE.format(self.ipfs_server, self.ipfs_port)
                 )
                 self.state = State.CONNETED
-                connected_clients.append(self)
             except ipfshttpclient.exceptions.ConnectionError as e:
                 log.exception("Retried connection {} times.".format(ipfs_retries))
                 raise e
@@ -57,7 +63,14 @@ class ipfs_connector(object):
         if self.state == State.CONNETED and self.ipfs is not None:
             self.ipfs.stop()
             self.state = State.DISCONNECTED
-            try:
-                connected_clients.remove(self)
-            except ValueError:
-                pass
+
+    @staticmethod
+    def _random_select():
+        import random
+        return random.choice(configuration.ipfs_hosts)
+
+
+if __name__ == "__main__":
+    connector = ipfs_connector()
+    connector.connect()
+    print(connector.ipfs.id())
