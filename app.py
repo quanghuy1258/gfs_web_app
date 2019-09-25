@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import json, random, base64, math
+import json, random, base64, math, os
 
 # Cryptography Library
 from cryptography.fernet import Fernet
@@ -57,15 +57,19 @@ class UploadFile():
   def __encrypt_file(self, file_path):
     key = Fernet.generate_key()
     fernet = Fernet(key)
-    with open(file_path, 'rb') as file_obj:
-      with open(file_path + '.enc', 'wb') as file_enc_obj:
-        file_enc_obj.write(base64.urlsafe_b64decode(fernet.encrypt(file_obj.read())))
+    data = None
+    with open(file_path, 'rb') as f:
+      data = f.read()
+    with open(file_path, 'wb') as f:
+      f.write(base64.urlsafe_b64decode(fernet.encrypt(data)))
     key_bin = base64.urlsafe_b64decode(key)
     return key_bin
 
   def __upload_file(self, ipfs_master, file_path):
     client = ipfs_master.getClient()
-    hash_str = client.add(file_path)['Hash']
+    info = client.add(file_path)
+    result = client.object.patch.add_link(info['Hash'], info['Name'], info['Hash'])
+    hash_str = result['Hash']
     client.close()
     hash_bin = hash_str[2:].encode('ascii')
     hash_bin = base64.urlsafe_b64decode(hash_bin)
@@ -100,7 +104,7 @@ class UploadFile():
 
   def __init__(self, file_path, ipfs_master, pri_key_sender, pub_key_receiver):
     key_bin = self.__encrypt_file(file_path)
-    hash_bin = self.__upload_file(ipfs_master, file_path + '.enc')
+    hash_bin = self.__upload_file(ipfs_master, file_path)
     memo_bin = self.__create_memo(key_bin, hash_bin)
     priv = account.PrivateKey(pri_key_sender)
     pub = account.PublicKey(pub_key_receiver)
@@ -111,20 +115,26 @@ class UploadFile():
     return self.__txid
 
 class DownloadFile():
-  def __decrypt_file(self, key_bin, file_enc_name):
+  def __decrypt_file(self, key_bin, file_name_enc, file_name):
     key = base64.urlsafe_b64encode(key_bin)
     fernet = Fernet(key)
-    with open(file_enc_name, 'rb') as file_enc_obj:
-      with open(file_enc_name + '.dec', 'wb') as file_obj:
-        file_obj.write(fernet.decrypt(base64.urlsafe_b64encode(file_enc_obj.read())))
+    data = None
+    with open(file_name_enc, 'rb') as f:
+      data = f.read()
+    os.remove(file_name_enc)
+    with open(file_name, 'wb') as f:
+      f.write(fernet.decrypt(base64.urlsafe_b64encode(data)))
 
   def __download_file(self, ipfs_master, hash_bin):
     hash_bin = base64.urlsafe_b64encode(hash_bin)
     hash_str = 'Qm' + hash_bin.decode('ascii')
     client = ipfs_master.getClient()
+    obj_links = client.object.links(hash_str)
+    name_str = obj_links['Links'][0]['Name']
+    hash_str = obj_links['Links'][0]['Hash']
     client.get(hash_str)
     client.close()
-    return hash_str
+    return name_str, hash_str
 
   def __create_shared_key(self, priv, pub):
     pub_point = pub.point()
@@ -158,9 +168,9 @@ class DownloadFile():
 
   def __init__(self, ipfs_master, pri_key_str, txid):
     key_bin, hash_bin = self.__decrypt_memo(pri_key_str, txid)
-    hash_str = self.__download_file(ipfs_master, hash_bin)
-    self.__decrypt_file(key_bin, hash_str)
-    self.__filename = hash_str + '.dec'
+    name_str, hash_str = self.__download_file(ipfs_master, hash_bin)
+    self.__decrypt_file(key_bin, hash_str, name_str)
+    self.__filename = name_str
 
   def get_filename(self):
     return self.__filename
