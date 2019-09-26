@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import json, random, base64, math, os
+import json, random, base64, math, os, argparse
 
 # Cryptography Library
 from cryptography.fernet import Fernet
@@ -175,3 +175,28 @@ class DownloadFile():
   def get_filename(self):
     return self.__filename
 
+if __name__ == '__main__':
+  parser = argparse.ArgumentParser(description='Upload and Download Files')
+  subparsers = parser.add_subparsers(title='method', description='Method Options Submenu', dest='method', help='select one method')
+
+  parser_upload = subparsers.add_parser('upload', help='upload files')
+  parser_upload.add_argument('--ipfs-config', type=str, required=True, help='Path to file of IPFS Configure')
+  parser_upload.add_argument('--file-path', type=str, required=True, help='Path to file that will be uploaded')
+  parser_upload.add_argument('--privkey-sender', type=str, required=True, help='Private key f sender')
+  parser_upload.add_argument('--pubkey-receiver', type=str, required=True, help='Public key of receiver')
+
+  parser_download = subparsers.add_parser('download', help='download files')
+  parser_download.add_argument('--ipfs-config', type=str, required=True, help='Path to file of IPFS Configure')
+  parser_download.add_argument('--txid', type=str, required=True, help='Transaction ID')
+  parser_download.add_argument('--privkey', type=str, required=True, help='Private key to decrypt information in transaction')
+
+  args = parser.parse_args()
+  if args.method == 'upload':
+    ipfs_master = IpfsMaster(args.ipfs_config)
+    upload_obj = UploadFile(args.file_path, ipfs_master, args.privkey_sender, args.pubkey_receiver)
+    print(json.dumps({'txid': upload_obj.get_txid()}))
+
+  if args.method == 'download':
+    ipfs_master = IpfsMaster(args.ipfs_config)
+    download_obj = DownloadFile(ipfs_master, args.privkey, args.txid)
+    print(json.dumps({'file_name': download_obj.get_filename()}))
