@@ -1,0 +1,5 @@
+{
+  "name": "hcmus",
+  "public_key": "BEO6VeZsDrDbZKPKCRoHaKaoLVGuWhVX9F88uuaqnXwdBpCpngbXF",
+  "private_key": "5JT8qLByKgeeqSCtnZWmMdBrzAcgfzCByRLZsuZUMdX4jowgvt1"
+}
